@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="YT 연습">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" href="icon-180.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <title>YT 연습 플레이어</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="app">
+
+  <!-- HOME -->
+  <section id="screen-home" class="screen">
+    <h1>YT 연습 플레이어</h1>
+
+    <div class="card">
+      <h3>유튜브 영상 열기</h3>
+      <div class="row">
+        <input id="ytInput" type="url" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="유튜브 주소를 붙여넣기">
+        <button id="btnOpenYt" class="primary">열기</button>
+      </div>
+      <p class="note">유튜브 곡은 <b>속도 조절 · A-B 반복</b>만 가능합니다 (피치 조절은 불가).</p>
+    </div>
+
+    <div class="card">
+      <h3>유튜브 검색 <span class="tag">선택</span></h3>
+      <div class="row">
+        <input id="searchInput" type="search" enterkeyhint="search" placeholder="곡 제목 검색">
+        <button id="btnSearch">검색</button>
+      </div>
+      <p id="searchHint" class="note"></p>
+      <div id="searchResults" class="list"></div>
+      <details>
+        <summary>검색 설정 (YouTube Data API 키)</summary>
+        <p class="note">검색은 본인의 무료 API 키가 있어야 동작합니다. 키는 이 기기의 브라우저에만 저장되고 구글 외에는 전송되지 않습니다. 하루 약 100회 검색까지 무료입니다.</p>
+        <p class="note">발급: Google Cloud Console에서 프로젝트를 만들고 &quot;YouTube Data API v3&quot;를 사용 설정한 뒤 API 키를 만드세요.</p>
+        <div class="row">
+          <input id="apiKeyInput" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" placeholder="API 키">
+          <button id="btnSaveKey">저장</button>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h3>내 기기의 음악 파일</h3>
+      <button id="btnOpenLocal" class="primary wide">📂 내 파일에서 열기</button>
+      <p class="note">mp3 · m4a · wav · flac 등. <b>피치와 속도를 모두</b> 조절할 수 있습니다.</p>
+    </div>
+
+    <button id="btnFavorites" class="wide">⭐ 즐겨찾기</button>
+  </section>
+
+  <!-- FAVORITES -->
+  <section id="screen-favorites" class="screen" hidden>
+    <header class="bar">
+      <button class="icon" data-back aria-label="뒤로">←</button>
+      <h2>즐겨찾기</h2>
+    </header>
+    <div class="row gap">
+      <button id="btnExport">내보내기</button>
+      <button id="btnImport">가져오기</button>
+    </div>
+    <p class="note">앱 데이터는 이 브라우저에 저장됩니다. 기기를 바꾸거나 데이터를 지우기 전에는 &quot;내보내기&quot;로 백업해두세요.</p>
+    <div id="favList" class="list"></div>
+    <p id="favEmpty" class="note" hidden>저장된 즐겨찾기가 없습니다.</p>
+  </section>
+
+  <!-- PLAYER -->
+  <section id="screen-player" class="screen" hidden>
+    <header class="bar">
+      <button class="icon" data-back aria-label="뒤로">←</button>
+      <h2 id="playerTitle"></h2>
+    </header>
+
+    <div id="ytWrap" class="video-wrap" hidden><div id="ytHost"></div></div>
+    <div id="localWrap" class="local-card" hidden>
+      <div class="local-icon">🎵</div>
+      <div id="localName" class="local-name"></div>
+    </div>
+    <p id="statusLine" class="note"></p>
+
+    <div class="transport">
+      <button id="btnPlay" class="primary">재생</button>
+      <button id="btnRestart">⏮ 처음부터</button>
+    </div>
+
+    <div class="timeline">
+      <span id="tCur">00:00</span>
+      <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="재생 위치">
+      <span id="tDur">00:00</span>
+    </div>
+
+    <div id="pitchGroup" class="group">
+      <div class="label">피치 (반음)</div>
+      <div class="stepper">
+        <button id="btnPitchMinus" aria-label="피치 내리기">－</button>
+        <output id="valPitch">0</output>
+        <button id="btnPitchPlus" aria-label="피치 올리기">＋</button>
+        <span class="range">-12 ~ +12</span>
+        <button id="btnPitchReset" class="small">초기화</button>
+      </div>
+      <p id="pitchNote" class="note" hidden>유튜브 영상은 브라우저에서 소리를 가공할 수 없어 피치 조절이 되지 않습니다. 피치 연습은 &quot;내 파일에서 열기&quot;를 이용하세요.</p>
+    </div>
+
+    <div class="group">
+      <div class="label">속도</div>
+      <div class="stepper">
+        <button id="btnSpeedMinus" aria-label="속도 낮추기">－</button>
+        <output id="valSpeed">1.00x</output>
+        <button id="btnSpeedPlus" aria-label="속도 높이기">＋</button>
+        <span class="range" id="speedRange">0.25 ~ 2.00</span>
+        <button id="btnSpeedReset" class="small">초기화</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="label">구간 반복 (A-B)</div>
+      <div class="ab">
+        <button id="btnSetA" class="small">A 지정</button>
+        <input id="aMin" inputmode="numeric" placeholder="분" aria-label="A 분">
+        <span>:</span>
+        <input id="aSec" inputmode="decimal" placeholder="초" aria-label="A 초">
+      </div>
+      <div class="ab">
+        <button id="btnSetB" class="small">B 지정</button>
+        <input id="bMin" inputmode="numeric" placeholder="분" aria-label="B 분">
+        <span>:</span>
+        <input id="bSec" inputmode="decimal" placeholder="초" aria-label="B 초">
+      </div>
+      <label class="check"><input id="chkLoop" type="checkbox"> 구간 반복 사용</label>
+    </div>
+
+    <button id="btnSaveFav" class="wide">⭐ 현재 설정으로 즐겨찾기 저장</button>
+  </section>
+
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+<input id="fileLocal" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.flac" hidden>
+<input id="fileImport" type="file" accept="application/json,.json" hidden>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
