@@ -1,5 +1,6 @@
 import { PracticeEngine } from "./engine.js";
 import { YoutubeController, parseVideoId } from "./youtube.js";
+import { fetchSuggestions } from "./suggest.js";
 import * as store from "./store.js";
 
 const $ = (id) => document.getElementById(id);
@@ -486,7 +487,62 @@ $("btnSaveKey").addEventListener("click", () => {
   toast("API 키를 저장했습니다");
 });
 
+const suggestList = $("suggestList");
+let suggestSeq = 0;
+let suggestTimer = null;
+let suggestActive = -1;
+
+function hideSuggestions() {
+  suggestSeq += 1;
+  clearTimeout(suggestTimer);
+  suggestActive = -1;
+  suggestList.hidden = true;
+  suggestList.replaceChildren();
+}
+
+function showSuggestions(items) {
+  suggestActive = -1;
+  if (!items.length) {
+    suggestList.hidden = true;
+    suggestList.replaceChildren();
+    return;
+  }
+  const nodes = items.slice(0, 8).map((text) => {
+    const li = make("li", "", text);
+    li.setAttribute("role", "option");
+    li.addEventListener("click", () => {
+      el.searchInput.value = text;
+      runSearch();
+    });
+    return li;
+  });
+  suggestList.replaceChildren(...nodes);
+  suggestList.hidden = false;
+}
+
+function highlightSuggestion(index) {
+  [...suggestList.children].forEach((li, i) => li.classList.toggle("active", i === index));
+}
+
+el.searchInput.addEventListener("input", () => {
+  clearTimeout(suggestTimer);
+  const query = el.searchInput.value.trim();
+  if (!query) {
+    hideSuggestions();
+    return;
+  }
+  suggestTimer = setTimeout(async () => {
+    const mine = ++suggestSeq;
+    const items = await fetchSuggestions(query);
+    if (mine === suggestSeq && document.activeElement === el.searchInput) showSuggestions(items);
+  }, 180);
+});
+
+// Delay so a tap on a suggestion still registers before the list disappears on blur.
+el.searchInput.addEventListener("blur", () => setTimeout(hideSuggestions, 250));
+
 async function runSearch() {
+  hideSuggestions();
   const key = store.getSettings().apiKey;
   const query = el.searchInput.value.trim();
   if (!key) {
@@ -530,7 +586,19 @@ function renderSearchResults(items) {
 
 $("btnSearch").addEventListener("click", runSearch);
 el.searchInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") runSearch();
+  if (e.isComposing) return;
+  const items = [...suggestList.children];
+  if ((e.key === "ArrowDown" || e.key === "ArrowUp") && items.length && !suggestList.hidden) {
+    e.preventDefault();
+    const step = e.key === "ArrowDown" ? 1 : -1;
+    suggestActive = (suggestActive + step + items.length) % items.length;
+    highlightSuggestion(suggestActive);
+  } else if (e.key === "Escape") {
+    hideSuggestions();
+  } else if (e.key === "Enter") {
+    if (suggestActive >= 0 && items[suggestActive]) el.searchInput.value = items[suggestActive].textContent;
+    runSearch();
+  }
 });
 
 $("btnOpenLocal").addEventListener("click", () => el.fileLocal.click());
