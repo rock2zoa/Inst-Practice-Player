@@ -33,7 +33,10 @@
     <div class="card">
       <h3>유튜브 검색 <span class="tag">선택</span></h3>
       <div class="row">
-        <input id="searchInput" type="search" enterkeyhint="search" placeholder="곡 제목 검색">
+        <div class="suggest-wrap">
+          <input id="searchInput" type="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="곡 제목 검색">
+          <ul id="suggestList" class="suggest" role="listbox" hidden></ul>
+        </div>
         <button id="btnSearch">검색</button>
       </div>
       <p id="searchHint" class="note"></p>

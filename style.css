@@ -76,6 +76,27 @@ button.icon { padding: 6px 12px; font-size: 20px; }
 .item .sub { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item .del { flex: none; padding: 6px 10px; min-height: 36px; }
 
+.suggest-wrap { position: relative; flex: 1; min-width: 0; }
+.suggest-wrap input { width: 100%; }
+.suggest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: 46vh;
+  overflow-y: auto;
+  background: #20242d;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.suggest li { padding: 12px 14px; font-size: 15px; cursor: pointer; }
+.suggest li.active, .suggest li:active { background: #2e3441; }
+
 details { margin-top: 12px; }
 summary { color: var(--muted); font-size: 13.5px; cursor: pointer; }
 details .row { margin-top: 8px; }

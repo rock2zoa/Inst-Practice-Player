@@ -9,6 +9,7 @@ const SHELL = [
   "js/app.js",
   "js/engine.js",
   "js/store.js",
+  "js/suggest.js",
   "js/youtube.js",
   "vendor/SoundTouchNode.js",
   "vendor/constants.js",
