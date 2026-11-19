@@ -105,6 +105,14 @@ export class YoutubeController {
     }
   }
 
+  getRate() {
+    try {
+      return this.ready ? this.player.getPlaybackRate() : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   getRates() {
     try {
       const rates = this.ready ? this.player.getAvailablePlaybackRates() : null;

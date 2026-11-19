@@ -30,6 +30,7 @@ const state = {
   loopOn: false,
   seeking: false,
   pendingFavorite: null,
+  coarseRates: null,
 };
 
 const el = {
@@ -201,6 +202,7 @@ function prepPlayer(mode, title) {
   state.b = null;
   state.loopOn = false;
   state.seeking = false;
+  state.coarseRates = null;
   engine.loop = { enabled: false, a: 0, b: 0 };
   for (const f of [el.aMin, el.aSec, el.bMin, el.bSec]) f.value = "";
   el.chkLoop.checked = false;
@@ -243,20 +245,31 @@ function setPitch(value) {
   updatePitchUi();
 }
 
+let rateCheckTimer = null;
+
 function setSpeed(value) {
-  if (state.mode === "youtube") {
-    state.speed = nearest(yt.getRates(), value);
+  state.speed = round2(Math.max(SPEED_MIN, Math.min(SPEED_MAX, value)));
+  if (state.mode === "local") {
+    engine.setSpeed(state.speed);
+  } else if (state.mode === "youtube") {
     yt.setRate(state.speed);
-  } else {
-    state.speed = round2(Math.max(SPEED_MIN, Math.min(SPEED_MAX, value)));
-    if (state.mode === "local") engine.setSpeed(state.speed);
+    // The embedded player normally accepts any rate (e.g. 1.05), but if it rounds one it doesn't
+    // support, show what it really uses and fall back to its own coarser rate list for stepping.
+    clearTimeout(rateCheckTimer);
+    rateCheckTimer = setTimeout(() => {
+      const actual = yt.getRate();
+      if (state.mode !== "youtube" || !actual || Math.abs(actual - state.speed) <= 0.01) return;
+      state.coarseRates = yt.getRates();
+      state.speed = round2(actual);
+      updateSpeedUi();
+    }, 400);
   }
   updateSpeedUi();
 }
 
 function stepSpeed(direction) {
-  if (state.mode === "youtube") {
-    const rates = yt.getRates();
+  if (state.mode === "youtube" && state.coarseRates) {
+    const rates = state.coarseRates;
     const index = rates.indexOf(nearest(rates, state.speed));
     setSpeed(rates[Math.max(0, Math.min(rates.length - 1, index + direction))]);
   } else {
@@ -415,8 +428,6 @@ async function openYoutube(videoId, favorite = null) {
   if (token !== state.token) return;
   el.btnPlay.disabled = false;
   el.statusLine.textContent = "재생이 시작되지 않으면 영상 위의 재생 버튼을 직접 눌러주세요.";
-  const rates = yt.getRates();
-  el.speedRange.textContent = `${rates[0].toFixed(2)} ~ ${rates[rates.length - 1].toFixed(2)}`;
   if (favorite) applySettings(favorite);
 }
 
@@ -556,11 +567,38 @@ async function runSearch() {
     const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=15&q=${encodeURIComponent(query)}&key=${encodeURIComponent(key)}`;
     const res = await fetch(url);
     const data = await res.json();
-    if (!res.ok) throw new Error((data.error && data.error.message) || `검색 실패 (${res.status})`);
+    if (!res.ok) throw new Error(describeApiError(data.error, res.status));
     renderSearchResults(data.items || []);
   } catch (e) {
     el.searchResults.replaceChildren(make("p", "note", `검색에 실패했습니다: ${e.message}`));
   }
+}
+
+function describeApiError(error, status) {
+  const message = (error && error.message) || "";
+  const reasons = [
+    ...((error && error.errors) || []).map((x) => x.reason),
+    ...((error && error.details) || []).map((x) => x.reason),
+    error && error.status,
+  ].filter(Boolean);
+  const reason = [...new Set(reasons)].join(", ");
+  const text = `${reasons.join(" ")} ${message}`.toLowerCase();
+  let hint = "";
+  if (/accessnotconfigured|service_disabled|has not been used|is disabled/.test(text)) {
+    hint = "이 키가 속한 프로젝트에서 YouTube Data API v3가 사용 설정되지 않았습니다. 키를 만든 프로젝트와 같은 프로젝트에서 \"사용\"을 눌렀는지 확인하세요.";
+  } else if (/referer|referrer/.test(text)) {
+    hint = "키의 웹사이트 제한에 이 사이트 주소가 맞지 않습니다. \"https://내계정.github.io/*\" 형식(소문자, 끝에 /*)으로 등록했는지 확인하세요.";
+  } else if (/api_key_service_blocked|are blocked|api target/.test(text)) {
+    hint = "키의 \"API 제한\"에 YouTube Data API v3가 포함되어 있지 않습니다.";
+  } else if (/quota|ratelimit|rate_limit|dailylimit/.test(text)) {
+    hint = "오늘의 무료 검색 한도를 모두 썼습니다. 태평양 시간 자정(한국 시간 오후 4~5시)에 초기화됩니다.";
+  } else if (/keyinvalid|api_key_invalid|api key not valid/.test(text)) {
+    hint = "API 키가 올바르지 않습니다. 복사한 키가 전부 들어갔는지 확인하세요.";
+  } else if (/permission|forbidden|denied/.test(text)) {
+    hint = "키 설정(API 사용 설정, 키 제한)을 확인하세요. 제한을 잠시 \"없음\"으로 풀어서 되는지 보면 원인을 좁힐 수 있습니다.";
+  }
+  const detail = [message || `검색 실패 (${status})`, reason && `[${reason}]`].filter(Boolean).join(" ");
+  return hint ? `${hint}\n(${detail})` : detail;
 }
 
 function renderSearchResults(items) {
